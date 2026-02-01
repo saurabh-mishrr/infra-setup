@@ -15,7 +15,8 @@ services:
       - ./certs:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     networks:
-      - app_network
+      app_network:
+        ipv4_address: 172.20.0.10
     depends_on:
       - n8n
     healthcheck:
@@ -41,7 +42,7 @@ services:
       - GENERIC_TIMEZONE=Asia/Kolkata
       - N8N_METRICS=true
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_HOST=172.20.0.30
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n_db}
       - DB_POSTGRESDB_USER=${POSTGRES_USER:-n8n_user}
@@ -49,7 +50,8 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
-      - app_network
+      app_network:
+        ipv4_address: 172.20.0.20
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,7 +81,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - postgres_logs:/var/log/postgresql
     networks:
-      - app_network
+      app_network:
+        ipv4_address: 172.20.0.30
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -93,6 +96,10 @@ networks:
   app_network:
     driver: bridge
     name: docker_app_network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
 
 volumes:
   n8n_data:
