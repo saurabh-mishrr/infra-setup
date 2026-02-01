@@ -1,0 +1,4 @@
+local.n8n.insta.com
+localhost
+127.0.0.1
+::1

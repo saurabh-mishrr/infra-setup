@@ -1,0 +1,23 @@
+# Certificates
+certs/*.pem
+certs/*.key
+
+# Docker
+.env
+
+# Logs
+*.log
+
+# Backups
+*.backup.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

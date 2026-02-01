@@ -1,0 +1,105 @@
+services:
+  # Nginx Web Server (Reverse Proxy)
+  webserver:
+    build:
+      context: ./docker-apps/webserver
+      dockerfile: Dockerfile
+    container_name: webserver
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker-apps/webserver/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker-apps/webserver/conf.d:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - app_network
+    depends_on:
+      - n8n
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # n8n Workflow Automation
+  n8n:
+    build:
+      context: ./docker-apps/n8n
+      dockerfile: Dockerfile
+    container_name: n8n
+    restart: unless-stopped
+    environment:
+      - N8N_HOST=local.n8n.insta.com
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://local.n8n.insta.com/
+      - GENERIC_TIMEZONE=Asia/Kolkata
+      - N8N_METRICS=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n_db}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-n8n_user}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n_secure_password_change_me}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - app_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL 17 with pgvector
+  postgres:
+    build:
+      context: ./docker-apps/postgres
+      dockerfile: Dockerfile
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-n8n_db}
+      - POSTGRES_USER=${POSTGRES_USER:-n8n_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n_secure_password_change_me}
+      - ADDITIONAL_DATABASES=${ADDITIONAL_DATABASES:-}
+      - ADDITIONAL_USERS=${ADDITIONAL_USERS:-}
+      - ENABLE_PGVECTOR=${ENABLE_PGVECTOR:-true}
+      - POSTGRES_TIMEZONE=${POSTGRES_TIMEZONE:-UTC}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_logs:/var/log/postgresql
+    networks:
+      - app_network
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n_user}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+networks:
+  app_network:
+    driver: bridge
+    name: docker_app_network
+
+volumes:
+  n8n_data:
+    name: n8n_data
+  nginx_logs:
+    name: nginx_logs
+  postgres_data:
+    name: postgres_data
+  postgres_logs:
+    name: postgres_logs

@@ -1,0 +1,164 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DOCKER SETUP ARCHITECTURE                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              HOST MACHINE                                   │
+│                                                                             │
+│  /etc/hosts                                                                 │
+│  ┌────────────────────────────────────────────────────────────┐            │
+│  │ 127.0.0.1    local.n8n.insta.com                           │            │
+│  └────────────────────────────────────────────────────────────┘            │
+│                                                                             │
+│  Browser: https://local.n8n.insta.com                                      │
+│                          │                                                  │
+│                          │ HTTPS (443)                                      │
+│                          ▼                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                    DOCKER NETWORK (app_network)                     │  │
+│  │                                                                     │  │
+│  │  ┌────────────────────────────────────────────────────────────┐   │  │
+│  │  │              NGINX REVERSE PROXY (webserver)               │   │  │
+│  │  │                                                            │   │  │
+│  │  │  Ports: 80, 443                                           │   │  │
+│  │  │  SSL: /etc/nginx/ssl/cert.pem, key.pem                    │   │  │
+│  │  │                                                            │   │  │
+│  │  │  ┌──────────────────────────────────────────────────┐    │   │  │
+│  │  │  │  Virtual Host: local.n8n.insta.com               │    │   │  │
+│  │  │  │  - HTTP → HTTPS redirect                         │    │   │  │
+│  │  │  │  - HTTPS → proxy_pass http://n8n:5678           │    │   │  │
+│  │  │  │  - WebSocket support enabled                     │    │   │  │
+│  │  │  └──────────────────────────────────────────────────┘    │   │  │
+│  │  │                                                            │   │  │
+│  │  └────────────────────────────┬───────────────────────────────┘   │  │
+│  │                               │                                   │  │
+│  │                               │ HTTP (5678)                       │  │
+│  │                               ▼                                   │  │
+│  │  ┌────────────────────────────────────────────────────────────┐  │  │
+│  │  │                    N8N APPLICATION                         │  │  │
+│  │  │                                                            │  │  │
+│  │  │  Container: n8n                                           │  │  │
+│  │  │  Port: 5678                                               │  │  │
+│  │  │  Volume: n8n_data → /home/node/.n8n                       │  │  │
+│  │  │  Health: /healthz endpoint                                │  │  │
+│  │  │                                                            │  │  │
+│  │  └────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SETUP WORKFLOW                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  1. ./setup.sh
+     │
+     ├─► Check Prerequisites (Docker, Docker Compose)
+     │
+     ├─► ./update-hosts.sh
+     │   └─► Update /etc/hosts with domains from domains.txt
+     │
+     ├─► ./generate-certs.sh
+     │   ├─► Install mkcert (if needed)
+     │   ├─► Install local CA
+     │   └─► Generate SSL certificates → ./certs/
+     │
+     ├─► docker-compose build
+     │   ├─► Build webserver (nginx:alpine + custom config)
+     │   └─► Build n8n (n8nio/n8n:latest)
+     │
+     └─► docker-compose up -d
+         └─► Start all containers
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FILE STRUCTURE                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+/var/www/setup/
+├── setup.sh                    # Main setup orchestrator
+├── start.sh                    # Quick start (after setup)
+├── stop.sh                     # Stop all containers
+├── generate-certs.sh           # SSL certificate generation
+├── update-hosts.sh             # /etc/hosts management
+├── domains.txt                 # Domain configuration
+├── docker-compose.yml          # Container orchestration
+├── README.md                   # Documentation
+├── .env.example                # Environment template
+├── .gitignore                  # Git ignore rules
+│
+├── certs/                      # SSL certificates (generated)
+│   ├── cert.pem
+│   └── key.pem
+│
+└── docker-apps/
+    ├── webserver/              # Nginx reverse proxy
+    │   ├── Dockerfile
+    │   ├── nginx.conf          # Main nginx config
+    │   └── conf.d/
+    │       ├── default.conf    # Default server + health check
+    │       └── n8n.conf        # n8n virtual host
+    │
+    └── n8n/                    # n8n workflow automation
+        └── Dockerfile
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        MANAGEMENT COMMANDS                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  Setup & Start:
+    ./setup.sh              # Complete setup (first time)
+    ./start.sh              # Start containers (after setup)
+    
+  Stop & Restart:
+    ./stop.sh               # Stop all containers
+    docker-compose restart  # Restart all containers
+    
+  Monitoring:
+    docker-compose ps       # Container status
+    docker-compose logs -f  # View all logs
+    docker-compose logs -f n8n      # n8n logs only
+    docker-compose logs -f webserver # nginx logs only
+    
+  Maintenance:
+    ./generate-certs.sh     # Regenerate certificates
+    ./update-hosts.sh       # Update hosts file
+    docker-compose build    # Rebuild images
+    docker-compose down -v  # Remove containers & volumes
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      ADDING NEW APPLICATIONS                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  1. Add domain to domains.txt:
+     echo "local.newapp.insta.com" >> domains.txt
+     
+  2. Update hosts and regenerate certs:
+     ./update-hosts.sh
+     ./generate-certs.sh
+     
+  3. Create Dockerfile:
+     mkdir -p docker-apps/newapp
+     # Create docker-apps/newapp/Dockerfile
+     
+  4. Add to docker-compose.yml:
+     # Add new service under services:
+     
+  5. Create nginx config:
+     # Create docker-apps/webserver/conf.d/newapp.conf
+     
+  6. Rebuild and restart:
+     docker-compose build
+     docker-compose up -d
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SECURITY FEATURES                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  ✓ SSL/TLS encryption (HTTPS only)
+  ✓ HTTP to HTTPS automatic redirect
+  ✓ Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
+  ✓ Isolated Docker network
+  ✓ Health checks for all services
+  ✓ No direct port exposure (except nginx 80/443)
+  ✓ Volume-based data persistence
